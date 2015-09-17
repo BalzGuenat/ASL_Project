@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="module_asl_project" default="compile.module.asl_project">
+  <dirname property="module.asl_project.basedir" file="${ant.file.module_asl_project}"/>
+  
+  <property name="module.jdk.home.asl_project" value="${project.jdk.home}"/>
+  <property name="module.jdk.bin.asl_project" value="${project.jdk.bin}"/>
+  <property name="module.jdk.classpath.asl_project" value="${project.jdk.classpath}"/>
+  
+  <property name="compiler.args.asl_project" value="-encoding windows-1252 -source 8 ${compiler.args}"/>
+  
+  <property name="asl_project.output.dir" value="${module.asl_project.basedir}/out/production/ASL_Project"/>
+  <property name="asl_project.testoutput.dir" value="${module.asl_project.basedir}/out/test/ASL_Project"/>
+  
+  <path id="asl_project.module.bootclasspath">
+    <!-- Paths to be included in compilation bootclasspath -->
+  </path>
+  
+  <path id="asl_project.module.production.classpath">
+    <path refid="${module.jdk.classpath.asl_project}"/>
+    <pathelement location="${basedir}/lib/postgresql-9.4-1202.jdbc41.jar"/>
+  </path>
+  
+  <path id="asl_project.runtime.production.module.classpath">
+    <pathelement location="${asl_project.output.dir}"/>
+    <pathelement location="${basedir}/lib/postgresql-9.4-1202.jdbc41.jar"/>
+  </path>
+  
+  <path id="asl_project.module.classpath">
+    <path refid="${module.jdk.classpath.asl_project}"/>
+    <pathelement location="${asl_project.output.dir}"/>
+    <pathelement location="${basedir}/lib/postgresql-9.4-1202.jdbc41.jar"/>
+  </path>
+  
+  <path id="asl_project.runtime.module.classpath">
+    <pathelement location="${asl_project.testoutput.dir}"/>
+    <pathelement location="${asl_project.output.dir}"/>
+    <pathelement location="${basedir}/lib/postgresql-9.4-1202.jdbc41.jar"/>
+  </path>
+  
+  
+  <patternset id="excluded.from.module.asl_project">
+    <patternset refid="ignored.files"/>
+  </patternset>
+  
+  <patternset id="excluded.from.compilation.asl_project">
+    <patternset refid="excluded.from.module.asl_project"/>
+  </patternset>
+  
+  <path id="asl_project.module.sourcepath">
+    <dirset dir="${module.asl_project.basedir}">
+      <include name="src"/>
+    </dirset>
+  </path>
+  
+  
+  <target name="compile.module.asl_project" depends="compile.module.asl_project.production,compile.module.asl_project.tests" description="Compile module ASL_Project"/>
+  
+  <target name="compile.module.asl_project.production" description="Compile module ASL_Project; production classes">
+    <mkdir dir="${asl_project.output.dir}"/>
+    <javac destdir="${asl_project.output.dir}" debug="${compiler.debug}" nowarn="${compiler.generate.no.warnings}" memorymaximumsize="${compiler.max.memory}" fork="true" executable="${module.jdk.bin.asl_project}/javac">
+      <compilerarg line="${compiler.args.asl_project}"/>
+      <bootclasspath refid="asl_project.module.bootclasspath"/>
+      <classpath refid="asl_project.module.production.classpath"/>
+      <src refid="asl_project.module.sourcepath"/>
+      <patternset refid="excluded.from.compilation.asl_project"/>
+    </javac>
+    
+    <copy todir="${asl_project.output.dir}">
+      <fileset dir="${module.asl_project.basedir}/src">
+        <patternset refid="compiler.resources"/>
+        <type type="file"/>
+      </fileset>
+    </copy>
+  </target>
+  
+  <target name="compile.module.asl_project.tests" depends="compile.module.asl_project.production" description="compile module ASL_Project; test classes" unless="skip.tests"/>
+  
+  <target name="clean.module.asl_project" description="cleanup module">
+    <delete dir="${asl_project.output.dir}"/>
+    <delete dir="${asl_project.testoutput.dir}"/>
+  </target>
+</project>

@@ -1,0 +1,23 @@
+CREATE SCHEMA asl;
+
+CREATE TABLE asl.message (
+	messageid uuid PRIMARY KEY,
+	senderid uuid NOT NULL,
+	receiverid uuid,
+	queueid uuid NOT NULL,
+	timeofarrival timestamp NOT NULL,
+	body text,
+	delivered BOOL DEFAULT FALSE NOT NULL);
+
+
+CREATE INDEX messageididx
+ON asl.message
+USING btree (messageid);
+
+CREATE INDEX receiverididx
+ON asl.message
+USING btree (receiverid);
+
+CREATE INDEX queueididx
+ON asl.message
+USING btree (queueid);
