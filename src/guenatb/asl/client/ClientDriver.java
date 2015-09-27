@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -35,7 +36,7 @@ public abstract class ClientDriver {
                     lastReadLine++;
                     String line = r.readLine();
                     if (!line.startsWith("#"))
-                        startClient(r.readLine());
+                        startClient(line);
                 }
             } catch (FileNotFoundException e) {
                 System.err.println("configFile not found; exiting.");
@@ -48,23 +49,42 @@ public abstract class ClientDriver {
     protected static void startClient(String spec) throws IOException {
         try {
             String[] args = spec.split(" ");
-            if (args[0].equals("FixedClient")) {
-                for (int i = 0; i < Integer.parseInt(args[1]); i++) {
-                    Thread t = new Thread(new Runnable() {
-                        @Override
-                        public void run() {
+            switch (args[0]) {
+                case "FixedClient":
+                    for (int i = 0; i < Integer.parseInt(args[1]); i++) {
+                        Thread t = new Thread(() -> {
                             try {
-                                FixedClient.main(args);
+                                FixedClient.main(Arrays.copyOfRange(args, 2, args.length));
                             } catch (IOException e) {
                                 System.err.println("FixedClient threw IOException.");
+                                e.printStackTrace();
                             }
-                        }
-                    });
-                    t.run();
-                }
+                        });
+                        t.start();
+                        t.join();
+                    }
+                    break;
+                case "RandomClient":
+                    for (int i = 0; i < Integer.parseInt(args[1]); i++) {
+                        Thread t = new Thread(() -> {
+                            try {
+                                RandomClient.main(Arrays.copyOfRange(args, 2, args.length));
+                            } catch (IOException e) {
+                                System.err.println("FixedClient threw IOException.");
+                                e.printStackTrace();
+                            }
+                        });
+                        t.start();
+                        t.join();
+                    }
+                    break;
+                default:
+                    System.err.println("Don't know how to instantiate client class \"" + args[0] + "\".");
+                    break;
             }
-        } catch (NumberFormatException e) {
-            throw new IOException();
+        } catch (NumberFormatException | InterruptedException e) {
+            System.err.println("Exception when trying to to start client.");
+            e.printStackTrace();
         }
     }
 
