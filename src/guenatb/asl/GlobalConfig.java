@@ -13,6 +13,6 @@ public final class GlobalConfig {
     public static final String DB_PASSWORD = "ham";
 
     public static final String FIRST_MIDDLEWARE_HOST = "localhost";
-    public static final int FIRST_MIDDLEWARE_PORT= 13131;
+    public static final int FIRST_MIDDLEWARE_PORT = 13131;
 
 }

@@ -1,5 +1,7 @@
 CREATE SCHEMA asl;
 
+CREATE TABLE asl.active_queues (id uuid PRIMARY KEY);
+
 CREATE TABLE asl.message (
 	messageid uuid PRIMARY KEY,
 	senderid uuid NOT NULL,

@@ -12,23 +12,13 @@ public class ControlMessage extends AbstractMessage {
     public final UUID firstArg;
     public final UUID secondArg;
 
-    public enum ControlType {
-        CREATE_QUEUE,
-        DELETE_QUEUE,
-        POP_QUEUE,
-        PEEK_QUEUE,
-        GET_FROM_SENDER,
-        GET_READY_QUEUES
-    }
-
     /**
-     *
      * @param asenderId
-     * @param atype This indicates what kind of control message this is.
-     * @param args If type is GET_READY_QUEUES then args should be empty.
-     *             If type is GET_FROM_SENDER then args should contain first the id of the queried
-     *             queue and then the id of the requested sender.
-     *             Otherwise args should only contain the id of the queried queue.
+     * @param atype     This indicates what kind of control message this is.
+     * @param args      If type is GET_READY_QUEUES then args should be empty.
+     *                  If type is GET_FROM_SENDER then args should contain first the id of the queried
+     *                  queue and then the id of the requested sender.
+     *                  Otherwise args should only contain the id of the queried queue.
      */
     public ControlMessage(UUID asenderId, ControlType atype, UUID... args) {
         messageId = UUID.randomUUID();
@@ -59,6 +49,15 @@ public class ControlMessage extends AbstractMessage {
             default:
                 throw new RuntimeException("Invalid type argument for ControlMessage constructor.");
         }
+    }
+
+    public enum ControlType {
+        CREATE_QUEUE,
+        DELETE_QUEUE,
+        POP_QUEUE,
+        PEEK_QUEUE,
+        GET_FROM_SENDER,
+        GET_READY_QUEUES
     }
 
 }

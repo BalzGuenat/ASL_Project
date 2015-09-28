@@ -119,8 +119,8 @@ public class Middleware {
     void addMessage(NormalMessage msg) throws SQLException {
         PreparedStatement stmt = dbConnection.prepareStatement(
                 "INSERT INTO asl.message " +
-                "(messageid, senderid, receiverid, queueid, timeofarrival, body) " +
-                "VALUES (?, ?, ?, ?, ?, ?);"
+                        "(messageid, senderid, receiverid, queueid, timeofarrival, body) " +
+                        "VALUES (?, ?, ?, ?, ?, ?);"
         );
         int argNumber = 1;
         stmt.setObject(argNumber++, msg.getMessageId());

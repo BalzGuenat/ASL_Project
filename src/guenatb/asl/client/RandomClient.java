@@ -1,6 +1,5 @@
 package guenatb.asl.client;
 
-import guenatb.asl.AbstractMessage;
 import guenatb.asl.ControlMessage;
 import guenatb.asl.GlobalConfig;
 import guenatb.asl.NormalMessage;
@@ -21,7 +20,7 @@ public class RandomClient extends AbstractClient {
         super(UUID.randomUUID());
     }
 
-    public static void main(String[] args) throws IOException{
+    public static void main(String[] args) throws IOException {
         RandomClient client = new RandomClient();
         UUID queueId = UUID.randomUUID();
         ControlMessage createQueueMsg = new ControlMessage(client.clientId, ControlMessage.ControlType.CREATE_QUEUE, queueId);
