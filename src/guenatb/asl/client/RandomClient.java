@@ -14,7 +14,13 @@ import java.util.UUID;
  */
 public class RandomClient extends AbstractClient {
 
-    static final Random random = new Random();
+    private static final Random random = new Random();
+    private static final char[] symbols = ("" +
+            "0123456789" +
+            "qwertyuiopasdfghjklzxcvbnm" +
+            "QWERTYUIOPASDFGHJKLZXCVBNM" +
+            "., ?!"
+            ).toCharArray();
 
     RandomClient() {
         super(UUID.randomUUID());
@@ -41,8 +47,9 @@ public class RandomClient extends AbstractClient {
     static String randomMessage() {
         int messageSize = random.nextInt(GlobalConfig.BODY_SIZE_UPPER_BOUND - GlobalConfig.BODY_SIZE_LOWER_BOUND)
                 + GlobalConfig.BODY_SIZE_LOWER_BOUND;
-        byte[] messageBytes = new byte[messageSize];
-        random.nextBytes(messageBytes);
-        return new String(messageBytes);
+        char[] msg = new char[messageSize];
+        for (int i = 0; i < messageSize; i++)
+            msg[i] = symbols[random.nextInt(symbols.length)];
+        return String.valueOf(msg);
     }
 }

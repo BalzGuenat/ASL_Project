@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.UUID;
 
 /**
@@ -75,6 +77,7 @@ public class Middleware {
                         return;
                     case GET_READY_QUEUES:
                         fetchReadyQueues(cmsg.getSenderId());
+                        // TODO send answer back
                         return;
                     default:
                         throw new RuntimeException("Unknown ControlMessage type.");
@@ -92,35 +95,79 @@ public class Middleware {
         }
     }
 
-    private void createQueue(UUID queueId) {
-        throw new RuntimeException("createQueue is not implemented yet.");
+    private void createQueue(UUID queueId) throws SQLException {
+        PreparedStatement stmt = dbConnection.prepareStatement(
+                "INSERT INTO asl.active_queues " +
+                "(id) " +
+                "VALUES (?);"
+        );
+        int argNumber = 1;
+        stmt.setObject(argNumber++, queueId);
+        stmt.execute();
     }
 
-    private void deleteQueue(UUID queueId) {
-        throw new RuntimeException("deleteQueue is not implemented yet.");
+    private void deleteQueue(UUID queueId) throws SQLException {
+        PreparedStatement stmt = dbConnection.prepareStatement(
+                "DELETE FROM asl.active_queues " +
+                "WHERE id = ?;"
+        );
+        int argNumber = 1;
+        stmt.setObject(argNumber++, queueId);
+        stmt.execute();
     }
 
-    private void popQueue(UUID queueId) {
-        throw new RuntimeException("popQueue is not implemented yet.");
+    private void popQueue(UUID queueId) throws SQLException {
+        PreparedStatement stmt = dbConnection.prepareStatement(
+                "WITH top AS " +
+                    "(SELECT * " +
+                    "FROM  asl.message " +
+                    "WHERE queueid = ? " +
+                    "LIMIT 1)" +
+                "DELETE " +
+                "FROM top " +
+                "RETURNING *;"
+        );
+        int argNumber = 1;
+        stmt.setObject(argNumber++, queueId);
+        stmt.execute();
     }
 
-    private void peekQueue(UUID queueId) {
-        throw new RuntimeException("peekQueue is not implemented yet.");
+    private void peekQueue(UUID queueId) throws SQLException {
+        PreparedStatement stmt = dbConnection.prepareStatement(
+                "SELECT * " +
+                "FROM  asl.message " +
+                "WHERE queueid = ? " +
+                "LIMIT 1;"
+        );
+        int argNumber = 1;
+        stmt.setObject(argNumber++, queueId);
+        stmt.execute();
     }
 
     private void fetchMessagesFromSender(UUID queueId, UUID senderId) {
         throw new RuntimeException("fetchMessageFromSender is not implemented yet.");
     }
 
-    private void fetchReadyQueues(UUID receiverId) {
-        throw new RuntimeException("fetchReadyQueues is not implemented yet.");
+    private Collection<UUID> fetchReadyQueues(UUID receiverId) throws SQLException {
+        PreparedStatement stmt = dbConnection.prepareStatement(
+                "SELECT DISTINCT queueid " +
+                "FROM asl.message " +
+                "WHERE receiverid IS NULL OR receiverid = ?;"
+        );
+        int argNumber = 1;
+        stmt.setObject(argNumber++, receiverId);
+        ResultSet rs = stmt.executeQuery();
+        ArrayList<UUID> queues = new ArrayList<>();
+        while (rs.next())
+            queues.add((UUID) rs.getObject(1));
+        return queues;
     }
 
     void addMessage(NormalMessage msg) throws SQLException {
         PreparedStatement stmt = dbConnection.prepareStatement(
                 "INSERT INTO asl.message " +
-                        "(messageid, senderid, receiverid, queueid, timeofarrival, body) " +
-                        "VALUES (?, ?, ?, ?, ?, ?);"
+                "(messageid, senderid, receiverid, queueid, timeofarrival, body) " +
+                "VALUES (?, ?, ?, ?, ?, ?);"
         );
         int argNumber = 1;
         stmt.setObject(argNumber++, msg.getMessageId());
