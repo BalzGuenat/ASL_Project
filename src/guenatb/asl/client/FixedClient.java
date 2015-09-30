@@ -1,5 +1,6 @@
 package guenatb.asl.client;
 
+import guenatb.asl.CommunicationException;
 import guenatb.asl.NormalMessage;
 
 import java.io.IOException;
@@ -12,28 +13,35 @@ import java.util.UUID;
 public class FixedClient extends AbstractClient {
 
     static final Random random = new Random();
-    int noOfMessagesSent = 0;
 
     FixedClient(UUID clientId) {
         super(clientId);
     }
 
-    public static void main(String[] args) throws IOException {
-        if (args.length < 1)
-            throw new RuntimeException("Must supply an ID as argument.");
+    /**
+     *
+     * @param args Must supply the clientId, receiverId and number of messages in that order.
+     */
+    public static void main(String[] args) {
+        if (args.length < 3)
+            throw new RuntimeException("Invalid number of arguments.");
 
-        long id = (long) Long.parseLong(args[0]);
+        long id = Long.parseLong(args[0]);
+        UUID receiverId = new UUID(0,Long.parseLong(args[1]));
+        UUID queueId = null; // TODO add this
+        int numOfMsgs = Integer.parseInt(args[2]);
         FixedClient client = new FixedClient(new UUID(0, id));
-
-        client.sendMessage();
-    }
-
-    void sendMessage() throws IOException {
-        String msgBody = String.format("This is client %s sending message number %d.",
-                clientId.toString(), noOfMessagesSent);
-        NormalMessage msg = new NormalMessage(UUID.randomUUID(), clientId,
-                new UUID(0, 0), new UUID(0, 0), msgBody);
-        sendMessage(msg);
+        for (int i = 0; i < numOfMsgs; i++) {
+            String msgBody = String.format("This is client %s sending message number %d to client %s.",
+                    client.clientId.toString(), i, receiverId.toString());
+            NormalMessage msg = new NormalMessage(UUID.randomUUID(), client.clientId,
+                    receiverId, queueId, msgBody);
+            try {
+                sendMessage(msg);
+            } catch (CommunicationException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
 }

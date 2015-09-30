@@ -1,7 +1,7 @@
 package guenatb.asl.middleware;
 
 import guenatb.asl.*;
-import guenatb.asl.client.AbstractClient;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.ObjectOutputStream;
@@ -16,6 +16,9 @@ import java.util.UUID;
  * Created by Balz Guenat on 17.09.2015.
  */
 public class Middleware {
+
+    static final Logger log = Logger.getLogger(Middleware.class.getName());
+    private static final int MAX_ACCEPT_ATTEMPTS = 3;
 
     Connection dbConnection;
     ServerSocket serverSocket;
@@ -39,26 +42,21 @@ public class Middleware {
 
     private void listen() {
         int failed = 0;
-        while (failed < 10) {
+        while (failed < MAX_ACCEPT_ATTEMPTS) {
             try {
                 Socket clientSocket = serverSocket.accept();
                 AbstractMessage msg = AbstractMessage.fromStream(clientSocket.getInputStream());
                 ObjectOutputStream oos = new ObjectOutputStream(clientSocket.getOutputStream());
                 AbstractMessage response = handleMessage(msg);
-                if (response != null) {
-                    oos.writeObject(response);
-                } else {
-                    oos.writeObject(new ConnectionEndMessage());
-                }
+                oos.writeObject(response);
                 clientSocket.close();
                 failed = 0;
-            } catch (IOException e) {
+            } catch (IOException | CommunicationException e) {
                 failed++;
-                System.err.println("Could not accept server socket.");
-                e.printStackTrace();
+                log.error("Could not accept server socket.", e);
             }
         }
-        System.err.println("Failed 10 times in a row, stop.");
+        log.error("Failed 10 times in a row, stop.");
     }
 
     private AbstractMessage handleMessage(AbstractMessage msg) {
@@ -68,35 +66,32 @@ public class Middleware {
                 switch (cmsg.type) {
                     case CREATE_QUEUE:
                         createQueue(cmsg.firstArg);
-                        return null;
+                        return ConnectionEndMessage.SUCCESS;
                     case DELETE_QUEUE:
                         deleteQueue(cmsg.firstArg);
-                        return null;
+                        return ConnectionEndMessage.SUCCESS;
                     case POP_QUEUE:
                         NormalMessage response = popQueue(cmsg.firstArg);
                         if (response != null)
                             return response;
-                        else {
-                            // TODO return "empty queue" message
-                            return null;
-                        }
+                        else
+                            return ConnectionEndMessage.SUCCESS;
                     case PEEK_QUEUE:
                         response = peekQueue(cmsg.firstArg);
                         if (response != null)
                             return response;
-                        else {
-                            // TODO return "empty queue" message
-                            return null;
-                        }
-                    case GET_FROM_SENDER:
-                        fetchMessagesFromSender(cmsg.firstArg, cmsg.secondArg);
-                        return null;
+                        else
+                            return ConnectionEndMessage.SUCCESS;
+                    case POP_FROM_SENDER:
+                        return popFromSender(cmsg.firstArg, cmsg.secondArg);
+                    case PEEK_FROM_SENDER:
+                        return peekFromSender(cmsg.firstArg, cmsg.secondArg);
                     case GET_READY_QUEUES:
-                        Collection<UUID> queues = fetchReadyQueues(cmsg.getSenderId());
-                        return new QueueListMessage(queues, cmsg.getSenderId());
+                        Collection<UUID> queues = fetchReadyQueues(cmsg.senderId);
+                        return new QueueListMessage(queues, cmsg.senderId);
                     case REGISTER_CLIENT:
-                        registerClient(cmsg.getSenderId());
-                        return null;
+                        registerClient(cmsg.senderId);
+                        return ConnectionEndMessage.SUCCESS;
                     default:
                         throw new RuntimeException("Unknown ControlMessage type.");
                 }
@@ -105,14 +100,14 @@ public class Middleware {
                 Timestamp now = new Timestamp(new java.util.Date().getTime());
                 nmsg.setTimeOfArrival(now);
                 addMessage(nmsg);
-                return null;
+                return ConnectionEndMessage.SUCCESS;
             } else {
                 throw new RuntimeException("Invalid message type received.");
             }
         } catch (SQLException e) {
             System.err.println("SQL error while handling message.");
             System.err.println(e.getMessage());
-            return null;
+            return ConnectionEndMessage.ERROR;
         }
     }
 
@@ -151,12 +146,12 @@ public class Middleware {
     private NormalMessage popQueue(UUID queueId) throws SQLException {
         PreparedStatement stmt = dbConnection.prepareStatement(
                 "DELETE FROM asl.message " +
-                "WHERE messageid = any(array(" +
-                    "SELECT messageid " +
-                    "FROM  asl.message " +
-                    "WHERE queueid = ? " +
-                    "LIMIT 1)) " +
-                "RETURNING *;"
+                        "WHERE messageid = any(array(" +
+                        "SELECT messageid " +
+                        "FROM  asl.message " +
+                        "WHERE queueid = ? " +
+                        "LIMIT 1)) " +
+                        "RETURNING *;"
         );
         int argNumber = 1;
         stmt.setObject(argNumber++, queueId);
@@ -170,9 +165,9 @@ public class Middleware {
     private NormalMessage peekQueue(UUID queueId) throws SQLException {
         PreparedStatement stmt = dbConnection.prepareStatement(
                 "SELECT * " +
-                "FROM  asl.message " +
-                "WHERE queueid = ? " +
-                "LIMIT 1;"
+                        "FROM  asl.message " +
+                        "WHERE queueid = ? " +
+                        "LIMIT 1;"
         );
         int argNumber = 1;
         stmt.setObject(argNumber++, queueId);
@@ -183,8 +178,41 @@ public class Middleware {
             return null;
     }
 
-    private void fetchMessagesFromSender(UUID queueId, UUID senderId) {
-        throw new RuntimeException("fetchMessageFromSender is not implemented yet.");
+    private NormalMessage popFromSender(UUID queueId, UUID senderId) throws SQLException {
+        PreparedStatement stmt = dbConnection.prepareStatement(
+                "DELETE FROM asl.message " +
+                        "WHERE messageid = any(array(" +
+                        "SELECT messageid " +
+                        "FROM  asl.message " +
+                        "WHERE queueid = ? AND sennderid = ? " +
+                        "LIMIT 1)) " +
+                        "RETURNING *;"
+        );
+        int argNumber = 1;
+        stmt.setObject(argNumber++, queueId);
+        stmt.setObject(argNumber++, senderId);
+        ResultSet rs = stmt.executeQuery();
+        if (rs.next())
+            return new NormalMessage(rs);
+        else
+            return null;
+    }
+
+    private NormalMessage peekFromSender(UUID queueId, UUID senderId) throws SQLException {
+        PreparedStatement stmt = dbConnection.prepareStatement(
+                "SELECT * " +
+                        "FROM  asl.message " +
+                        "WHERE queueid = ? AND senderid = ? " +
+                        "LIMIT 1;"
+        );
+        int argNumber = 1;
+        stmt.setObject(argNumber++, queueId);
+        stmt.setObject(argNumber++, senderId);
+        ResultSet rs = stmt.executeQuery();
+        if (rs.next())
+            return new NormalMessage(rs);
+        else
+            return null;
     }
 
     private Collection<UUID> fetchReadyQueues(UUID receiverId) throws SQLException {

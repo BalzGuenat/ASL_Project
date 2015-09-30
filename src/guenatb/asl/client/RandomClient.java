@@ -1,5 +1,6 @@
 package guenatb.asl.client;
 
+import guenatb.asl.CommunicationException;
 import guenatb.asl.ControlMessage;
 import guenatb.asl.GlobalConfig;
 import guenatb.asl.NormalMessage;
@@ -26,20 +27,24 @@ public class RandomClient extends AbstractClient {
         super(UUID.randomUUID());
     }
 
-    public static void main(String[] args) throws IOException {
-        RandomClient client = new RandomClient();
-        UUID queueId = UUID.randomUUID();
-        client.createQueue(queueId);
-        NormalMessage msg = new NormalMessage(UUID.randomUUID(), client.clientId, null, queueId, randomMessage());
-        client.sendMessage(msg);
-        Collection<UUID> readyQueues = client.fetchReadyQueues();
-        if (!readyQueues.isEmpty()) {
-            NormalMessage inbound = client.popFromQueue(readyQueues.iterator().next());
-            System.out.println("Client received message: " + inbound.getBody());
-        } else {
-            System.out.println("No message available.");
+    public static void main(String[] args) {
+        try {
+            RandomClient client = new RandomClient();
+            UUID queueId = UUID.randomUUID();
+            client.createQueue(queueId);
+            NormalMessage msg = new NormalMessage(UUID.randomUUID(), client.clientId, null, queueId, randomMessage());
+            client.sendMessage(msg);
+            Collection<UUID> readyQueues = client.fetchReadyQueues();
+            if (!readyQueues.isEmpty()) {
+                NormalMessage inbound = client.popFromQueue(readyQueues.iterator().next());
+                System.out.println("Client received message: " + inbound.getBody());
+            } else {
+                System.out.println("No message available.");
+            }
+            client.deleteQueue(queueId);
+        } catch (CommunicationException e) {
+
         }
-        client.deleteQueue(queueId);
     }
 
     static String randomMessage() {

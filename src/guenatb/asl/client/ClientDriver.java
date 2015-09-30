@@ -1,5 +1,8 @@
 package guenatb.asl.client;
 
+import guenatb.asl.CommunicationException;
+import org.apache.log4j.Logger;
+
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -13,6 +16,8 @@ import java.util.UUID;
  * Created by Balz Guenat on 18.09.2015.
  */
 public abstract class ClientDriver {
+
+    static final Logger log = Logger.getLogger(ClientDriver.class);
 
     protected static final Map<UUID, AbstractClient> clients = new HashMap<>();
 
@@ -53,12 +58,7 @@ public abstract class ClientDriver {
                 case "FixedClient":
                     for (int i = 0; i < Integer.parseInt(args[1]); i++) {
                         Thread t = new Thread(() -> {
-                            try {
-                                FixedClient.main(Arrays.copyOfRange(args, 2, args.length));
-                            } catch (IOException e) {
-                                System.err.println("FixedClient threw IOException.");
-                                e.printStackTrace();
-                            }
+                            FixedClient.main(Arrays.copyOfRange(args, 2, args.length));
                         });
                         t.start();
                         t.join();
@@ -67,24 +67,20 @@ public abstract class ClientDriver {
                 case "RandomClient":
                     for (int i = 0; i < Integer.parseInt(args[1]); i++) {
                         Thread t = new Thread(() -> {
-                            try {
-                                RandomClient.main(Arrays.copyOfRange(args, 2, args.length));
-                            } catch (IOException e) {
-                                System.err.println("FixedClient threw IOException.");
-                                e.printStackTrace();
-                            }
+                            RandomClient.main(Arrays.copyOfRange(args, 2, args.length));
                         });
                         t.start();
                         t.join();
                     }
                     break;
                 default:
-                    System.err.println("Don't know how to instantiate client class \"" + args[0] + "\".");
+                    log.error("Don't know how to instantiate client class \"" + args[0] + "\".");
                     break;
             }
-        } catch (NumberFormatException | InterruptedException e) {
-            System.err.println("Exception when trying to to start client.");
-            e.printStackTrace();
+        } catch (NumberFormatException e) {
+            log.error("Could not parse number in config line.", e);
+        } catch (InterruptedException e) {
+            log.error("Client thread was interrupted.", e);
         }
     }
 
