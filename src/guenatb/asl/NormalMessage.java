@@ -1,5 +1,7 @@
 package guenatb.asl;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.UUID;
 
@@ -8,6 +10,8 @@ import java.util.UUID;
  */
 public class NormalMessage extends AbstractMessage {
 
+    UUID messageId;
+    UUID senderId;
     UUID receiverId;
     UUID queueId;
 
@@ -22,6 +26,28 @@ public class NormalMessage extends AbstractMessage {
         receiverId = areceiverId;
         queueId = aqueueId;
         body = amessageBody;
+    }
+
+    public NormalMessage(ResultSet rs) {
+        try {
+            messageId = (UUID) rs.getObject("messageid");
+            senderId = (UUID) rs.getObject("senderid");
+            receiverId = (UUID) rs.getObject("receiverid");
+            queueId = (UUID) rs.getObject("queueid");
+            timeOfArrival = rs.getTimestamp("timeofarrival");
+            body = rs.getString("body");
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException("Could not instantiate message from data row.");
+        }
+    }
+
+    public UUID getMessageId() {
+        return messageId;
+    }
+
+    public UUID getSenderId() {
+        return senderId;
     }
 
     public UUID getReceiverId() {

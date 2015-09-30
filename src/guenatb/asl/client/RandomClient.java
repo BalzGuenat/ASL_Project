@@ -29,8 +29,7 @@ public class RandomClient extends AbstractClient {
     public static void main(String[] args) throws IOException {
         RandomClient client = new RandomClient();
         UUID queueId = UUID.randomUUID();
-        ControlMessage createQueueMsg = new ControlMessage(client.clientId, ControlMessage.ControlType.CREATE_QUEUE, queueId);
-        client.sendMessage(createQueueMsg);
+        client.createQueue(queueId);
         NormalMessage msg = new NormalMessage(UUID.randomUUID(), client.clientId, null, queueId, randomMessage());
         client.sendMessage(msg);
         Collection<UUID> readyQueues = client.fetchReadyQueues();
@@ -40,8 +39,7 @@ public class RandomClient extends AbstractClient {
         } else {
             System.out.println("No message available.");
         }
-        ControlMessage deleteQueueMsg = new ControlMessage(client.clientId, ControlMessage.ControlType.DELETE_QUEUE, queueId);
-        client.sendMessage(deleteQueueMsg);
+        client.deleteQueue(queueId);
     }
 
     static String randomMessage() {

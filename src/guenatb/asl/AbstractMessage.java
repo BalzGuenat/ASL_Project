@@ -11,9 +11,6 @@ import java.util.UUID;
  */
 public abstract class AbstractMessage implements Serializable {
 
-    UUID messageId;
-    UUID senderId;
-
     public static AbstractMessage fromStream(InputStream in)
             throws IOException {
         try {
@@ -23,14 +20,6 @@ public abstract class AbstractMessage implements Serializable {
             e.printStackTrace();
             throw new RuntimeException();
         }
-    }
-
-    public UUID getMessageId() {
-        return messageId;
-    }
-
-    public UUID getSenderId() {
-        return senderId;
     }
 
 }

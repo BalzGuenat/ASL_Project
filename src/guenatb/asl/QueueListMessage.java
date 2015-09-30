@@ -11,7 +11,8 @@ public class QueueListMessage extends AbstractMessage {
     UUID receiverId;
     Collection<UUID> queueList;
 
-    QueueListMessage(Collection<UUID> aqueueList) {
+    public QueueListMessage(Collection<UUID> aqueueList, UUID receiverId) {
+        this.receiverId = receiverId;
         queueList = aqueueList;
     }
 

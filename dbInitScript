@@ -2,10 +2,12 @@ CREATE SCHEMA asl;
 
 CREATE TABLE asl.active_queues (id uuid PRIMARY KEY);
 
+CREATE TABLE asl.active_clients (id uuid PRIMARY KEY);
+
 CREATE TABLE asl.message (
 	messageid uuid PRIMARY KEY,
-	senderid uuid NOT NULL,
-	receiverid uuid,
+	senderid uuid NOT NULL references asl.active_clients(id),
+	receiverid uuid references asl.active_clients(id),
 	queueid uuid NOT NULL references asl.active_queues(id),
 	timeofarrival timestamp NOT NULL,
 	body text,

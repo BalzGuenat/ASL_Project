@@ -1,11 +1,10 @@
 package guenatb.asl.middleware;
 
-import guenatb.asl.AbstractMessage;
-import guenatb.asl.ControlMessage;
-import guenatb.asl.GlobalConfig;
-import guenatb.asl.NormalMessage;
+import guenatb.asl.*;
+import guenatb.asl.client.AbstractClient;
 
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.sql.*;
@@ -44,7 +43,14 @@ public class Middleware {
             try {
                 Socket clientSocket = serverSocket.accept();
                 AbstractMessage msg = AbstractMessage.fromStream(clientSocket.getInputStream());
-                handleMessage(msg);
+                ObjectOutputStream oos = new ObjectOutputStream(clientSocket.getOutputStream());
+                AbstractMessage response = handleMessage(msg);
+                if (response != null) {
+                    oos.writeObject(response);
+                } else {
+                    oos.writeObject(new ConnectionEndMessage());
+                }
+                clientSocket.close();
                 failed = 0;
             } catch (IOException e) {
                 failed++;
@@ -55,30 +61,42 @@ public class Middleware {
         System.err.println("Failed 10 times in a row, stop.");
     }
 
-    private void handleMessage(AbstractMessage msg) {
+    private AbstractMessage handleMessage(AbstractMessage msg) {
         try {
             if (msg instanceof ControlMessage) {
                 ControlMessage cmsg = (ControlMessage) msg;
                 switch (cmsg.type) {
                     case CREATE_QUEUE:
                         createQueue(cmsg.firstArg);
-                        return;
+                        return null;
                     case DELETE_QUEUE:
                         deleteQueue(cmsg.firstArg);
-                        return;
+                        return null;
                     case POP_QUEUE:
-                        popQueue(cmsg.firstArg);
-                        return;
+                        NormalMessage response = popQueue(cmsg.firstArg);
+                        if (response != null)
+                            return response;
+                        else {
+                            // TODO return "empty queue" message
+                            return null;
+                        }
                     case PEEK_QUEUE:
-                        peekQueue(cmsg.firstArg);
-                        return;
+                        response = peekQueue(cmsg.firstArg);
+                        if (response != null)
+                            return response;
+                        else {
+                            // TODO return "empty queue" message
+                            return null;
+                        }
                     case GET_FROM_SENDER:
                         fetchMessagesFromSender(cmsg.firstArg, cmsg.secondArg);
-                        return;
+                        return null;
                     case GET_READY_QUEUES:
-                        fetchReadyQueues(cmsg.getSenderId());
-                        // TODO send answer back
-                        return;
+                        Collection<UUID> queues = fetchReadyQueues(cmsg.getSenderId());
+                        return new QueueListMessage(queues, cmsg.getSenderId());
+                    case REGISTER_CLIENT:
+                        registerClient(cmsg.getSenderId());
+                        return null;
                     default:
                         throw new RuntimeException("Unknown ControlMessage type.");
                 }
@@ -87,12 +105,26 @@ public class Middleware {
                 Timestamp now = new Timestamp(new java.util.Date().getTime());
                 nmsg.setTimeOfArrival(now);
                 addMessage(nmsg);
-                return;
+                return null;
+            } else {
+                throw new RuntimeException("Invalid message type received.");
             }
         } catch (SQLException e) {
             System.err.println("SQL error while handling message.");
             System.err.println(e.getMessage());
+            return null;
         }
+    }
+
+    private void registerClient(UUID senderId) throws SQLException {
+        PreparedStatement stmt = dbConnection.prepareStatement(
+                "INSERT INTO asl.active_clients " +
+                        "(id) " +
+                        "VALUES (?);"
+        );
+        int argNumber = 1;
+        stmt.setObject(argNumber++, senderId);
+        stmt.execute();
     }
 
     private void createQueue(UUID queueId) throws SQLException {
@@ -116,23 +148,26 @@ public class Middleware {
         stmt.execute();
     }
 
-    private void popQueue(UUID queueId) throws SQLException {
+    private NormalMessage popQueue(UUID queueId) throws SQLException {
         PreparedStatement stmt = dbConnection.prepareStatement(
-                "WITH top AS " +
-                    "(SELECT * " +
+                "DELETE FROM asl.message " +
+                "WHERE messageid = any(array(" +
+                    "SELECT messageid " +
                     "FROM  asl.message " +
                     "WHERE queueid = ? " +
-                    "LIMIT 1)" +
-                "DELETE " +
-                "FROM top " +
+                    "LIMIT 1)) " +
                 "RETURNING *;"
         );
         int argNumber = 1;
         stmt.setObject(argNumber++, queueId);
-        stmt.execute();
+        ResultSet rs = stmt.executeQuery();
+        if (rs.next())
+            return new NormalMessage(rs);
+        else
+            return null;
     }
 
-    private void peekQueue(UUID queueId) throws SQLException {
+    private NormalMessage peekQueue(UUID queueId) throws SQLException {
         PreparedStatement stmt = dbConnection.prepareStatement(
                 "SELECT * " +
                 "FROM  asl.message " +
@@ -141,7 +176,11 @@ public class Middleware {
         );
         int argNumber = 1;
         stmt.setObject(argNumber++, queueId);
-        stmt.execute();
+        ResultSet rs = stmt.executeQuery();
+        if (rs.next())
+            return new NormalMessage(rs);
+        else
+            return null;
     }
 
     private void fetchMessagesFromSender(UUID queueId, UUID senderId) {

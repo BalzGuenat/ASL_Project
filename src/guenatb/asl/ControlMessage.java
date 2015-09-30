@@ -7,6 +7,8 @@ import java.util.UUID;
  */
 public class ControlMessage extends AbstractMessage {
 
+    UUID senderId;
+
     public final ControlType type;
 
     public final UUID firstArg;
@@ -21,7 +23,6 @@ public class ControlMessage extends AbstractMessage {
      *                  Otherwise args should only contain the id of the queried queue.
      */
     public ControlMessage(UUID asenderId, ControlType atype, UUID... args) {
-        messageId = UUID.randomUUID();
         senderId = asenderId;
         type = atype;
         switch (type) {
@@ -41,6 +42,7 @@ public class ControlMessage extends AbstractMessage {
                 secondArg = args[1];
                 break;
             case GET_READY_QUEUES:
+            case REGISTER_CLIENT:
                 if (args.length != 0)
                     throw new RuntimeException("Invalid number or arguments for ControlMessage type.");
                 firstArg = null;
@@ -57,7 +59,12 @@ public class ControlMessage extends AbstractMessage {
         POP_QUEUE,
         PEEK_QUEUE,
         GET_FROM_SENDER,
-        GET_READY_QUEUES
+        GET_READY_QUEUES,
+        REGISTER_CLIENT
+    }
+
+    public UUID getSenderId() {
+        return senderId;
     }
 
 }
