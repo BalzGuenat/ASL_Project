@@ -1,0 +1,1 @@
+"C:\Program Files\PostgreSQL\9.4\bin\psql" -U postgres -d asl -a -f dbInitScript

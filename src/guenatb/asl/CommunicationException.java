@@ -5,6 +5,10 @@ package guenatb.asl;
  */
 public class CommunicationException extends Exception {
 
+    public CommunicationException() {
+        super();
+    }
+
     public CommunicationException(Throwable cause) {
         super(cause);
     }

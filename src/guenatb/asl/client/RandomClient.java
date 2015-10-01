@@ -1,9 +1,6 @@
 package guenatb.asl.client;
 
-import guenatb.asl.CommunicationException;
-import guenatb.asl.ControlMessage;
-import guenatb.asl.GlobalConfig;
-import guenatb.asl.NormalMessage;
+import guenatb.asl.*;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -37,13 +34,20 @@ public class RandomClient extends AbstractClient {
             Collection<UUID> readyQueues = client.fetchReadyQueues();
             if (!readyQueues.isEmpty()) {
                 NormalMessage inbound = client.popFromQueue(readyQueues.iterator().next());
-                System.out.println("Client received message: " + inbound.getBody());
+                if (inbound != null)
+                    log.info("Client received message: " + inbound.getMessageId());
+                else
+                    log.info("No message available.");
             } else {
-                System.out.println("No message available.");
+                log.info("No message available.");
             }
             client.deleteQueue(queueId);
         } catch (CommunicationException e) {
-
+            log.error("Communication failed.");
+            e.printStackTrace();
+        } catch (InvalidOperation invalidOperation) {
+            log.info("Queue does not exist.");
+            invalidOperation.printStackTrace();
         }
     }
 

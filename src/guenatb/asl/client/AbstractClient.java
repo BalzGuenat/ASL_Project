@@ -46,7 +46,7 @@ public abstract class AbstractClient {
             ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());
             ConnectionEndMessage endmsg = (ConnectionEndMessage) ois.readObject();
             if (endmsg.type == ConnectionEndMessage.ConnectionEndType.SUCCESS)
-                log.info("Communication successful.");
+                log.info(String.format("Message %s sent successfully.", msg.toString()));
             else
                 log.error("Received error message from server.");
         } catch (ClassNotFoundException | ClassCastException e) {
@@ -97,11 +97,26 @@ public abstract class AbstractClient {
         return (NormalMessage) sendQuery(msg);
     }
 
-    NormalMessage popFromQueue(UUID queueId) throws CommunicationException {
+    /**
+     *
+     * @param queueId
+     * @return null if no message was available.
+     * @throws CommunicationException thrown if queue does not exist
+     */
+    NormalMessage popFromQueue(UUID queueId) throws CommunicationException, InvalidOperation {
         ControlMessage msg = new ControlMessage(clientId,
                 ControlMessage.ControlType.POP_QUEUE,
                 queueId);
-        return (NormalMessage) sendQuery(msg);
+        AbstractMessage response = sendQuery(msg);
+        if (response instanceof NormalMessage)
+            return (NormalMessage) response;
+        else if (response instanceof ConnectionEndMessage &&
+                ((ConnectionEndMessage) response).type == ConnectionEndMessage.SUCCESS.type)
+            return null;
+        else if (response instanceof ConnectionEndMessage)
+            throw new InvalidOperation();
+        else
+            throw new RuntimeException();
     }
 
     Collection<UUID> fetchReadyQueues() throws CommunicationException {

@@ -70,4 +70,9 @@ public class NormalMessage extends AbstractMessage {
         return body;
     }
 
+    @Override
+    public String toString() {
+        return String.format("NormalMessage:%s", messageId.toString());
+    }
+
 }

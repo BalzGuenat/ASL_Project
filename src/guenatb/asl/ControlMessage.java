@@ -54,14 +54,25 @@ public class ControlMessage extends AbstractMessage {
     }
 
     public enum ControlType {
-        CREATE_QUEUE,
-        DELETE_QUEUE,
-        POP_QUEUE,
-        PEEK_QUEUE,
-        POP_FROM_SENDER,
-        PEEK_FROM_SENDER,
-        GET_READY_QUEUES,
-        REGISTER_CLIENT
+        CREATE_QUEUE("CreateQueue"),
+        DELETE_QUEUE("DeleteQueue"),
+        POP_QUEUE("PopQueue"),
+        PEEK_QUEUE("PeekQueue"),
+        POP_FROM_SENDER("PopFromSender"),
+        PEEK_FROM_SENDER("PeekFromSender"),
+        GET_READY_QUEUES("GetReadyQueues"),
+        REGISTER_CLIENT("RegisterClient");
+
+        final String name;
+
+        ControlType(String name) {
+            this.name = name;
+        }
+    }
+
+    @Override
+    public String toString() {
+        return String.format("ControlMessage:%s", type.name);
     }
 
 }

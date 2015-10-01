@@ -7,10 +7,7 @@ import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Created by Balz Guenat on 18.09.2015.
@@ -65,13 +62,17 @@ public abstract class ClientDriver {
                     }
                     break;
                 case "RandomClient":
-                    for (int i = 0; i < Integer.parseInt(args[1]); i++) {
-                        Thread t = new Thread(() -> {
+                    int numOfClients = Integer.parseInt(args[1]);
+                    List<Thread> threads = new ArrayList<>();
+                    for (int i = 0; i < numOfClients; i++) {
+                        threads.add(new Thread(() -> {
                             RandomClient.main(Arrays.copyOfRange(args, 2, args.length));
-                        });
-                        t.start();
-                        t.join();
+                        }));
                     }
+                    for (Thread t : threads)
+                        t.start();
+                    for (Thread t : threads)
+                        t.join();
                     break;
                 default:
                     log.error("Don't know how to instantiate client class \"" + args[0] + "\".");

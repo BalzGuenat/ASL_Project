@@ -10,6 +10,7 @@ public class ConnectionEndMessage extends AbstractMessage {
 
     public static final ConnectionEndMessage SUCCESS = new ConnectionEndMessage(ConnectionEndType.SUCCESS);
     public static final ConnectionEndMessage ERROR = new ConnectionEndMessage(ConnectionEndType.ERROR);
+    public static final ConnectionEndMessage INVALID_OPERATION = new ConnectionEndMessage(ConnectionEndType.INVALID_OPERATION);
 
     public final ConnectionEndType type;
 
@@ -19,6 +20,10 @@ public class ConnectionEndMessage extends AbstractMessage {
 
     public enum ConnectionEndType {
         SUCCESS,
-        ERROR
+        ERROR,
+        INVALID_OPERATION
     }
+
 }
+
+
