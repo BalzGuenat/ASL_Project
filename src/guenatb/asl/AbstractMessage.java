@@ -16,10 +16,10 @@ public abstract class AbstractMessage implements Serializable {
 
     static final Logger log = Logger.getLogger(AbstractMessage.class.getName());
 
-    public static AbstractMessage fromStream(InputStream in)
+    public static AbstractMessage fromStream(ObjectInputStream ois)
             throws CommunicationException {
         try {
-            return (AbstractMessage) new ObjectInputStream(in).readObject();
+            return (AbstractMessage) ois.readObject();
         } catch (ClassNotFoundException | ClassCastException e) {
             log.error("Invalid message received.");
             throw new CommunicationException(e);

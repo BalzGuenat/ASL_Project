@@ -14,5 +14,11 @@ public final class GlobalConfig {
 
     public static final String FIRST_MIDDLEWARE_HOST = "localhost";
     public static final int FIRST_MIDDLEWARE_PORT = 13131;
+    public static final String SECOND_MIDDLEWARE_HOST = "localhost";
+    public static final int SECOND_MIDDLEWARE_PORT = 13132;
+
+    public static final int THREADS_PER_MIDDLEWARE = 32;
+    public static final boolean SLEEP_BETWEEN_QUEUE_POLLS = true;
+    public static final int QUEUE_CAPACITY = 1024;
 
 }

@@ -7,7 +7,8 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
-import java.rmi.server.ExportException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.UUID;
 
@@ -16,11 +17,13 @@ import java.util.UUID;
  */
 public abstract class AbstractClient {
 
-    static final Logger log = Logger.getLogger(AbstractClient.class.getName());
+    static final Logger log = Logger.getLogger(AbstractClient.class);
 
+    final String host;
     final UUID clientId;
 
-    AbstractClient(UUID aclientId) {
+    AbstractClient(UUID aclientId, String host) {
+        this.host = host;
         clientId = aclientId;
         try {
             register();
@@ -31,70 +34,52 @@ public abstract class AbstractClient {
 
     void register() throws CommunicationException {
         ControlMessage msg = new ControlMessage(clientId, ControlMessage.ControlType.REGISTER_CLIENT);
-        sendMessage(msg);
+        transmitMessage(msg);
     }
 
-    static void sendMessage(AbstractMessage msg) throws CommunicationException {
-        ObjectOutputStream oos = null;
+    private AbstractMessage transmitMessage(AbstractMessage msg) throws CommunicationException {
         try {
-            Socket socket = new Socket(
-                    GlobalConfig.FIRST_MIDDLEWARE_HOST,
-                    GlobalConfig.FIRST_MIDDLEWARE_PORT);
-            oos = new ObjectOutputStream(socket.getOutputStream());
-            oos.writeObject(msg);
-            oos.flush();
-            ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());
-            ConnectionEndMessage endmsg = (ConnectionEndMessage) ois.readObject();
-            if (endmsg.type == ConnectionEndMessage.ConnectionEndType.SUCCESS)
-                log.info(String.format("Message %s sent successfully.", msg.toString()));
-            else
-                log.error("Received error message from server.");
-        } catch (ClassNotFoundException | ClassCastException e) {
-            log.error("Received broken message.", e);
-            throw new CommunicationException(e);
-        } catch (IOException e) {
-            log.error("Exception thrown by socket.", e);
-            throw new CommunicationException(e);
-        } finally {
-            try {
-                oos.close();
-            } catch (IOException e) {
-                log.error("Could not close socket.", e);
-            }
-        }
-    }
-
-    AbstractMessage sendQuery(ControlMessage msg) throws CommunicationException {
-        try {
-            Socket socket = new Socket(
-                    GlobalConfig.FIRST_MIDDLEWARE_HOST,
-                    GlobalConfig.FIRST_MIDDLEWARE_PORT);
-
+            Socket socket = new Socket(host, GlobalConfig.FIRST_MIDDLEWARE_PORT);
             ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
             oos.writeObject(msg);
             oos.flush();
-
-            return AbstractMessage.fromStream(socket.getInputStream());
+            Instant sent = Instant.now();
+            log.info(String.format("Sent message: %s", msg.toString()));
+            ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());
+            AbstractMessage abstractResponse = AbstractMessage.fromStream(ois);
+            long responseTime = sent.until(Instant.now(), ChronoUnit.MILLIS);
+            log.info(String.format("Received response to message %s: %s after %d ms.",
+                    msg, abstractResponse, responseTime));
+            return abstractResponse;
         } catch (IOException e) {
+            log.error("Error while sending message.", e);
             throw new CommunicationException(e);
+        }
+    }
+
+    void sendMessage(NormalMessage msg) throws CommunicationException {
+        AbstractMessage abstractResponse = transmitMessage(msg);
+        if (!(abstractResponse instanceof ConnectionEndMessage &&
+                ((ConnectionEndMessage) abstractResponse).type == ConnectionEndMessage.ConnectionEndType.SUCCESS)) {
+            throw new CommunicationException();
         }
     }
 
     void createQueue(UUID queueId) throws CommunicationException {
         ControlMessage createQueueMsg = new ControlMessage(clientId, ControlMessage.ControlType.CREATE_QUEUE, queueId);
-        sendMessage(createQueueMsg);
+        transmitMessage(createQueueMsg);
     }
 
     void deleteQueue(UUID queueId) throws CommunicationException {
         ControlMessage deleteQueueMsg = new ControlMessage(clientId, ControlMessage.ControlType.DELETE_QUEUE, queueId);
-        sendMessage(deleteQueueMsg);
+        transmitMessage(deleteQueueMsg);
     }
 
     NormalMessage peekFromQueue(UUID queueId) throws CommunicationException {
         ControlMessage msg = new ControlMessage(clientId,
                 ControlMessage.ControlType.PEEK_QUEUE,
                 queueId);
-        return (NormalMessage) sendQuery(msg);
+        return (NormalMessage) transmitMessage(msg);
     }
 
     /**
@@ -107,7 +92,7 @@ public abstract class AbstractClient {
         ControlMessage msg = new ControlMessage(clientId,
                 ControlMessage.ControlType.POP_QUEUE,
                 queueId);
-        AbstractMessage response = sendQuery(msg);
+        AbstractMessage response = transmitMessage(msg);
         if (response instanceof NormalMessage)
             return (NormalMessage) response;
         else if (response instanceof ConnectionEndMessage &&
@@ -122,7 +107,7 @@ public abstract class AbstractClient {
     Collection<UUID> fetchReadyQueues() throws CommunicationException {
         ControlMessage msg = new ControlMessage(clientId,
                 ControlMessage.ControlType.GET_READY_QUEUES);
-        return ((QueueListMessage) sendQuery(msg)).getQueueList();
+        return ((QueueListMessage) transmitMessage(msg)).getQueueList();
     }
 
 }

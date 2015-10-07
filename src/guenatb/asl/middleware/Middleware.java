@@ -4,59 +4,120 @@ import guenatb.asl.*;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.sql.*;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executor;
 
 /**
  * Created by Balz Guenat on 17.09.2015.
  */
 public class Middleware {
 
-    static final Logger log = Logger.getLogger(Middleware.class.getName());
+    static final Logger log = Logger.getLogger(Middleware.class);
     private static final int MAX_ACCEPT_ATTEMPTS = 3;
 
-    Connection dbConnection;
-    ServerSocket serverSocket;
+    static List<Thread> workerThreads = new ArrayList<>(GlobalConfig.THREADS_PER_MIDDLEWARE);
+    //static ArrayBlockingQueue<Socket> connectionQueue = new ArrayBlockingQueue<>(GlobalConfig.QUEUE_CAPACITY);
+    static ConcurrentLinkedQueue<Socket> connectionQueue = new ConcurrentLinkedQueue<>();
 
-    Middleware() throws SQLException, IOException {
-        dbConnection = DriverManager.getConnection(
-                GlobalConfig.DB_URL,
-                GlobalConfig.DB_USER,
-                GlobalConfig.DB_PASSWORD);
-        serverSocket = new ServerSocket(GlobalConfig.FIRST_MIDDLEWARE_PORT);
+    Connection dbConnection;
+
+    Middleware() {
+        try {
+            dbConnection = DriverManager.getConnection(
+                    GlobalConfig.DB_URL,
+                    GlobalConfig.DB_USER,
+                    GlobalConfig.DB_PASSWORD);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static void main(String[] args) {
-        try {
+        for (int i = 0; i < GlobalConfig.THREADS_PER_MIDDLEWARE; i++) {
             Middleware mw = new Middleware();
-            mw.listen();
-        } catch (SQLException | IOException e) {
-            e.printStackTrace();
+            Thread t = new Thread(mw::doWork);
+            workerThreads.add(t);
+            t.start();
         }
-    }
 
-    private void listen() {
-        int failed = 0;
-        while (failed < MAX_ACCEPT_ATTEMPTS) {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            for (Thread t : workerThreads) {
+                t.interrupt();
+                try {
+                    t.join(5000);
+                    if (t.isAlive())
+                        log.error("Middleware thread did not die after interrupt.");
+                } catch (InterruptedException e) {
+                    log.error("Interrupted while waiting for child thread to die.", e);
+                }
+            }
+        }));
+
+        ServerSocket serverSocket;
+        try {
+            serverSocket = new ServerSocket(GlobalConfig.FIRST_MIDDLEWARE_PORT);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        while (!Thread.interrupted()) {
             try {
                 Socket clientSocket = serverSocket.accept();
-                AbstractMessage msg = AbstractMessage.fromStream(clientSocket.getInputStream());
-                ObjectOutputStream oos = new ObjectOutputStream(clientSocket.getOutputStream());
-                AbstractMessage response = handleMessage(msg);
-                oos.writeObject(response);
-                clientSocket.close();
-                failed = 0;
-            } catch (IOException | CommunicationException e) {
-                failed++;
-                log.error("Could not accept server socket.", e);
+                connectionQueue.add(clientSocket);
+            } catch (IOException e) {
+                log.error("Error while waiting for client to connect.", e);
+            } catch (IllegalStateException e) {
+                log.error("Queue is full.");
             }
         }
-        log.error("Failed 10 times in a row, stop.");
+        log.info("Middleware main thread shutting down after interrupt.");
+    }
+
+    private void doWork() {
+        try {
+            while (!Thread.interrupted()) {
+                try {
+                    Socket clientSocket = connectionQueue.poll();
+
+                    // This code is for non-blocking queues.
+                    while (clientSocket == null) {
+                        if (GlobalConfig.SLEEP_BETWEEN_QUEUE_POLLS)
+                            Thread.sleep(100);
+                        else
+                            Thread.yield();
+                        clientSocket = connectionQueue.poll();
+                    }
+
+                    ObjectInputStream ois = new ObjectInputStream(clientSocket.getInputStream());
+                    AbstractMessage msg = AbstractMessage.fromStream(ois);
+                    Instant timeAccepted = Instant.now();
+                    AbstractMessage response = handleMessage(msg);
+                    ObjectOutputStream oos = new ObjectOutputStream(clientSocket.getOutputStream());
+                    oos.writeObject(response);
+
+                    //ois.close();
+                    //oos.close();
+                    clientSocket.close();
+                    log.info("Total connection time: " + String.valueOf(timeAccepted.until(Instant.now(),
+                            ChronoUnit.MILLIS) + "ms."));
+                } catch (IOException | CommunicationException e) {
+                    log.error("Error during connection.", e);
+                }
+            }
+        } catch (InterruptedException e) {}
+        log.info("Middleware worker thread shutting down after interrupt.");
     }
 
     private AbstractMessage handleMessage(AbstractMessage msg) {
@@ -71,21 +132,21 @@ public class Middleware {
                         deleteQueue(cmsg.firstArg);
                         return ConnectionEndMessage.SUCCESS;
                     case POP_QUEUE:
-                        NormalMessage response = popQueue(cmsg.firstArg);
+                        NormalMessage response = popQueue(cmsg.firstArg, cmsg.senderId);
                         if (response != null)
                             return response;
                         else
                             return ConnectionEndMessage.SUCCESS;
                     case PEEK_QUEUE:
-                        response = peekQueue(cmsg.firstArg);
+                        response = peekQueue(cmsg.firstArg, cmsg.senderId);
                         if (response != null)
                             return response;
                         else
                             return ConnectionEndMessage.SUCCESS;
                     case POP_FROM_SENDER:
-                        return popFromSender(cmsg.firstArg, cmsg.secondArg);
+                        return popFromSender(cmsg.firstArg, cmsg.secondArg, cmsg.senderId);
                     case PEEK_FROM_SENDER:
-                        return peekFromSender(cmsg.firstArg, cmsg.secondArg);
+                        return peekFromSender(cmsg.firstArg, cmsg.secondArg, cmsg.senderId);
                     case GET_READY_QUEUES:
                         Collection<UUID> queues = fetchReadyQueues(cmsg.senderId);
                         return new QueueListMessage(queues, cmsg.senderId);
@@ -143,18 +204,19 @@ public class Middleware {
         stmt.execute();
     }
 
-    private NormalMessage popQueue(UUID queueId) throws SQLException {
+    private NormalMessage popQueue(UUID queueId, UUID receiverId) throws SQLException {
         PreparedStatement stmt = dbConnection.prepareStatement(
                 "DELETE FROM asl.message " +
                         "WHERE messageid = any(array(" +
                         "SELECT messageid " +
                         "FROM  asl.message " +
-                        "WHERE queueid = ? " +
+                        "WHERE queueid = ? AND (receiverid IS NULL OR receiverid = ?) " +
                         "LIMIT 1)) " +
                         "RETURNING *;"
         );
         int argNumber = 1;
         stmt.setObject(argNumber++, queueId);
+        stmt.setObject(argNumber++, receiverId);
         ResultSet rs = stmt.executeQuery();
         if (rs.next())
             return new NormalMessage(rs);
@@ -162,15 +224,16 @@ public class Middleware {
             return null;
     }
 
-    private NormalMessage peekQueue(UUID queueId) throws SQLException {
+    private NormalMessage peekQueue(UUID queueId, UUID receiverId) throws SQLException {
         PreparedStatement stmt = dbConnection.prepareStatement(
                 "SELECT * " +
                         "FROM  asl.message " +
-                        "WHERE queueid = ? " +
+                        "WHERE queueid = ? AND (receiverid IS NULL OR receiverid = ?) " +
                         "LIMIT 1;"
         );
         int argNumber = 1;
         stmt.setObject(argNumber++, queueId);
+        stmt.setObject(argNumber++, receiverId);
         ResultSet rs = stmt.executeQuery();
         if (rs.next())
             return new NormalMessage(rs);
@@ -178,19 +241,20 @@ public class Middleware {
             return null;
     }
 
-    private NormalMessage popFromSender(UUID queueId, UUID senderId) throws SQLException {
+    private NormalMessage popFromSender(UUID queueId, UUID senderId, UUID receiverId) throws SQLException {
         PreparedStatement stmt = dbConnection.prepareStatement(
                 "DELETE FROM asl.message " +
                         "WHERE messageid = any(array(" +
                         "SELECT messageid " +
                         "FROM  asl.message " +
-                        "WHERE queueid = ? AND sennderid = ? " +
+                        "WHERE queueid = ? AND sennderid = ? AND (receiverid IS NULL OR receiverid = ?) " +
                         "LIMIT 1)) " +
                         "RETURNING *;"
         );
         int argNumber = 1;
         stmt.setObject(argNumber++, queueId);
         stmt.setObject(argNumber++, senderId);
+        stmt.setObject(argNumber++, receiverId);
         ResultSet rs = stmt.executeQuery();
         if (rs.next())
             return new NormalMessage(rs);
@@ -198,16 +262,17 @@ public class Middleware {
             return null;
     }
 
-    private NormalMessage peekFromSender(UUID queueId, UUID senderId) throws SQLException {
+    private NormalMessage peekFromSender(UUID queueId, UUID senderId, UUID receiverId) throws SQLException {
         PreparedStatement stmt = dbConnection.prepareStatement(
                 "SELECT * " +
                         "FROM  asl.message " +
-                        "WHERE queueid = ? AND senderid = ? " +
+                        "WHERE queueid = ? AND senderid = ? AND (receiverid IS NULL OR receiverid = ?) " +
                         "LIMIT 1;"
         );
         int argNumber = 1;
         stmt.setObject(argNumber++, queueId);
         stmt.setObject(argNumber++, senderId);
+        stmt.setObject(argNumber++, receiverId);
         ResultSet rs = stmt.executeQuery();
         if (rs.next())
             return new NormalMessage(rs);
