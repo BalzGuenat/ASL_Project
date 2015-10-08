@@ -8,6 +8,8 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.sql.*;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -28,8 +30,8 @@ public class Middleware {
     private static final int MAX_ACCEPT_ATTEMPTS = 3;
 
     static List<Thread> workerThreads = new ArrayList<>(GlobalConfig.THREADS_PER_MIDDLEWARE);
-    //static ArrayBlockingQueue<Socket> connectionQueue = new ArrayBlockingQueue<>(GlobalConfig.QUEUE_CAPACITY);
-    static ConcurrentLinkedQueue<Socket> connectionQueue = new ConcurrentLinkedQueue<>();
+    static ArrayBlockingQueue<Socket> connectionQueue = new ArrayBlockingQueue<>(GlobalConfig.QUEUE_CAPACITY);
+    //static ConcurrentLinkedQueue<Socket> connectionQueue = new ConcurrentLinkedQueue<>();
 
     Connection dbConnection;
 
@@ -89,26 +91,13 @@ public class Middleware {
         try {
             while (!Thread.interrupted()) {
                 try {
-                    Socket clientSocket = connectionQueue.poll();
-
-                    // This code is for non-blocking queues.
-                    while (clientSocket == null) {
-                        if (GlobalConfig.SLEEP_BETWEEN_QUEUE_POLLS)
-                            Thread.sleep(100);
-                        else
-                            Thread.yield();
-                        clientSocket = connectionQueue.poll();
-                    }
-
+                    Socket clientSocket = connectionQueue.take();
                     ObjectInputStream ois = new ObjectInputStream(clientSocket.getInputStream());
                     AbstractMessage msg = AbstractMessage.fromStream(ois);
                     Instant timeAccepted = Instant.now();
                     AbstractMessage response = handleMessage(msg);
                     ObjectOutputStream oos = new ObjectOutputStream(clientSocket.getOutputStream());
                     oos.writeObject(response);
-
-                    //ois.close();
-                    //oos.close();
                     clientSocket.close();
                     log.info("Total connection time: " + String.valueOf(timeAccepted.until(Instant.now(),
                             ChronoUnit.MILLIS) + "ms."));
