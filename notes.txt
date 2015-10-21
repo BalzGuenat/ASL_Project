@@ -1,0 +1,8 @@
+dryad01:
+Postgres server
+
+dryad02 upwards:
+middleware
+
+dryad16 downwards:
+clients

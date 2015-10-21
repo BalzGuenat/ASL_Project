@@ -54,6 +54,8 @@ public class Middleware {
             t.start();
         }
 
+        log.info("Started all worker threads.");
+
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             for (Thread t : workerThreads) {
                 t.interrupt();
@@ -73,6 +75,8 @@ public class Middleware {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+
+        log.info("Server socket created and now listening...");
 
         while (!Thread.interrupted()) {
             try {
