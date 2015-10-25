@@ -15,6 +15,10 @@ import java.util.*;
 public abstract class ClientDriver {
 
     static final Logger log = Logger.getLogger(ClientDriver.class);
+    /**
+     * This is the least amount of time (in millis) we wait for client threads after sending them an interrupt.
+     */
+    static final long WAIT_TIME_AFTER_INTERRUPT = 100;
 
     protected static final Map<UUID, AbstractClient> clients = new HashMap<>();
 
@@ -52,18 +56,21 @@ public abstract class ClientDriver {
         try {
             String[] args = spec.split(" ");
             switch (args[0]) {
-                case "FixedClient":
-                    for (int i = 0; i < Integer.parseInt(args[1]); i++) {
-                        Thread t = new Thread(() -> {
-                            FixedClient.main(Arrays.copyOfRange(args, 2, args.length));
-                        });
-                        t.start();
-                        t.join();
-                    }
-                    break;
                 case "RandomClient":
                     int numOfClients = Integer.parseInt(args[1]);
                     List<Thread> threads = new ArrayList<>();
+                    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                        try {
+                            for (Thread t : threads) {
+                                if (t.isAlive()) {
+                                    t.interrupt();
+                                    t.join(WAIT_TIME_AFTER_INTERRUPT);
+                                }
+                            }
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    }));
                     for (int i = 0; i < numOfClients; i++) {
                         threads.add(new Thread(() -> {
                             RandomClient.main(Arrays.copyOfRange(args, 2, args.length));
@@ -71,8 +78,6 @@ public abstract class ClientDriver {
                     }
                     for (Thread t : threads)
                         t.start();
-                    for (Thread t : threads)
-                        t.join();
                     break;
                 default:
                     log.error("Don't know how to instantiate client class \"" + args[0] + "\".");
@@ -80,8 +85,6 @@ public abstract class ClientDriver {
             }
         } catch (NumberFormatException e) {
             log.error("Could not parse number in config line.", e);
-        } catch (InterruptedException e) {
-            log.error("Client thread was interrupted.", e);
         }
     }
 

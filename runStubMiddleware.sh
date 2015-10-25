@@ -1,5 +1,5 @@
 #!/bin/bash
-echo Starting Middleware
+echo Starting StubMiddleware
 
 cd ~
 rm -rf local/jdk1.8.0_66
@@ -12,4 +12,4 @@ export PATH=$PATH:$JAVA_HOME/bin
 
 cd local/ASL_Project
 pkill java
-ant -f asl_project.xml -Djdk.home.1.8=$JAVA_HOME run.middleware
+ant -f asl_project.xml -Djdk.home.1.8=$JAVA_HOME run.stubmiddleware

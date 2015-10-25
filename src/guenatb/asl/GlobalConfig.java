@@ -13,17 +13,13 @@ public final class GlobalConfig {
     public static final String DB_USER = "postgres";
     public static final String DB_PASSWORD = "ham";
     */
-    public static final String DB_URL = "jdbc:postgresql://10.111.1.41:39800/asl";
+    public static final String DB_URL = "jdbc:postgresql://10.111.1.55:39800/asl";
     public static final String DB_USER = "postgres";
     public static final String DB_PASSWORD = "ham";
 
-    public static final String FIRST_MIDDLEWARE_HOST = "localhost";
-    public static final int FIRST_MIDDLEWARE_PORT = 13131;
-    public static final String SECOND_MIDDLEWARE_HOST = "localhost";
-    public static final int SECOND_MIDDLEWARE_PORT = 13132;
+    public static final int MIDDLEWARE_PORT = 13131;
 
-    public static final int THREADS_PER_MIDDLEWARE = 32;
-    public static final boolean SLEEP_BETWEEN_QUEUE_POLLS = true;
+    public static final int THREADS_PER_MIDDLEWARE = 8;
     public static final int QUEUE_CAPACITY = 1024;
 
 }

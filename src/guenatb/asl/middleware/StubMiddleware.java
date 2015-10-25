@@ -1,6 +1,7 @@
 package guenatb.asl.middleware;
 
 import guenatb.asl.*;
+import guenatb.asl.client.RandomClient;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
@@ -11,29 +12,34 @@ import java.net.Socket;
 import java.sql.*;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 
 /**
  * Created by Balz Guenat on 17.09.2015.
+ * This class is used to micro-benchmark the database
  */
-public class Middleware {
+public class StubMiddleware {
+
+    final static int MESSAGE_LENGTH = 200;
+    final static int THREAD_NUMBER = 8;
 
     static final int SERIALIZATION_FAILURE = 40001; // According to PostgreSQL docs.
 
-    static final Logger log = Logger.getLogger(Middleware.class);
-    private static final int MAX_ACCEPT_ATTEMPTS = 3;
-
+    static final Logger log = Logger.getLogger(StubMiddleware.class);
     static List<Thread> workerThreads = new ArrayList<>(GlobalConfig.THREADS_PER_MIDDLEWARE);
-    static ArrayBlockingQueue<Socket> connectionQueue = new ArrayBlockingQueue<>(GlobalConfig.QUEUE_CAPACITY);
-    //static ConcurrentLinkedQueue<Socket> connectionQueue = new ConcurrentLinkedQueue<>();
 
+
+    private static final Random random = new Random();
+    private static final char[] symbols = ("" +
+            "0123456789" +
+            "qwertyuiopasdfghjklzxcvbnm" +
+            "QWERTYUIOPASDFGHJKLZXCVBNM" +
+            "., ?!"
+    ).toCharArray();
     Connection dbConnection;
 
-    Middleware() {
+    StubMiddleware() {
         try {
             dbConnection = DriverManager.getConnection(
                     GlobalConfig.DB_URL,
@@ -46,8 +52,8 @@ public class Middleware {
     }
 
     public static void main(String[] args) {
-        for (int i = 0; i < GlobalConfig.THREADS_PER_MIDDLEWARE; i++) {
-            Middleware mw = new Middleware();
+        for (int i = 0; i < THREAD_NUMBER; i++) {
+            StubMiddleware mw = new StubMiddleware();
             Thread t = new Thread(mw::doWork);
             workerThreads.add(t);
             t.start();
@@ -68,113 +74,47 @@ public class Middleware {
             }
         }));
 
-        ServerSocket serverSocket;
-        try {
-            serverSocket = new ServerSocket(GlobalConfig.MIDDLEWARE_PORT);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
         log.info("Server socket created and now listening...");
 
-        while (!Thread.interrupted()) {
-            try {
-                Socket clientSocket = serverSocket.accept();
-                connectionQueue.add(clientSocket);
-            } catch (IOException e) {
-                log.error("Error while waiting for client to connect.", e);
-            } catch (IllegalStateException e) {
-                log.error("Queue is full.");
-            }
-        }
+        while (!Thread.interrupted()) {}
         log.info("Middleware main thread shutting down after interrupt.");
     }
 
-    private void doWork() {
-        try {
-            while (!Thread.interrupted()) {
-                Socket clientSocket = connectionQueue.take();
-                try {
-                    ObjectInputStream ois = new ObjectInputStream(clientSocket.getInputStream());
-                    AbstractMessage msg = AbstractMessage.fromStream(ois);
-                    Instant timeAccepted = Instant.now();
-                    AbstractMessage response = handleMessage(msg);
-                    ObjectOutputStream oos = new ObjectOutputStream(clientSocket.getOutputStream());
-                    oos.writeObject(response);
-                    oos.flush();
-                    log.info("Total connection time: " + String.valueOf(timeAccepted.until(Instant.now(),
-                            ChronoUnit.MILLIS) + "ms."));
-                    // Request fulfilled, put socket back in queue.
-                    connectionQueue.add(clientSocket);
-                } catch (IOException e) {
-                    log.info("Client (apparently) closed the connection.");
-                    try {clientSocket.close();} catch (IOException ignored) {}
-                } catch (CommunicationException e) {
-                    log.error("Error during connection.", e);
-                }
-            }
-        } catch (InterruptedException e) {}
-        log.info("Middleware worker thread shutting down after interrupt.");
+    static String randomMessage() {
+        int messageSize = MESSAGE_LENGTH;
+        char[] msg = new char[messageSize];
+        for (int i = 0; i < messageSize; i++)
+            msg[i] = symbols[random.nextInt(symbols.length)];
+        return String.valueOf(msg);
     }
 
-    private AbstractMessage handleMessage(AbstractMessage msg) {
-        // loop because of serialization errors
-        while (true) {
+    private void doWork() {
+
+        UUID clientId = UUID.randomUUID();
+        UUID queueId = UUID.randomUUID();
+        String msgbody = randomMessage();
+
+        try {
+            registerClient(clientId);
+            createQueue(queueId);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+
+        while (!Thread.interrupted()) {
+            NormalMessage msg = new NormalMessage(UUID.randomUUID(), clientId, null, queueId, msgbody);
+            Timestamp now = new Timestamp(new java.util.Date().getTime());
+            msg.setTimeOfArrival(now);
             try {
-                if (msg instanceof ControlMessage) {
-                    ControlMessage cmsg = (ControlMessage) msg;
-                    switch (cmsg.type) {
-                        case CREATE_QUEUE:
-                            createQueue(cmsg.firstArg);
-                            return ConnectionEndMessage.SUCCESS;
-                        case DELETE_QUEUE:
-                            deleteQueue(cmsg.firstArg);
-                            return ConnectionEndMessage.SUCCESS;
-                        case POP_QUEUE:
-                            NormalMessage response = popQueue(cmsg.firstArg, cmsg.senderId);
-                            if (response != null)
-                                return response;
-                            else
-                                return ConnectionEndMessage.SUCCESS;
-                        case PEEK_QUEUE:
-                            response = peekQueue(cmsg.firstArg, cmsg.senderId);
-                            if (response != null)
-                                return response;
-                            else
-                                return ConnectionEndMessage.SUCCESS;
-                        case POP_FROM_SENDER:
-                            return popFromSender(cmsg.firstArg, cmsg.secondArg, cmsg.senderId);
-                        case PEEK_FROM_SENDER:
-                            return peekFromSender(cmsg.firstArg, cmsg.secondArg, cmsg.senderId);
-                        case GET_READY_QUEUES:
-                            Collection<UUID> queues = fetchReadyQueues(cmsg.senderId);
-                            return new QueueListMessage(queues, cmsg.senderId);
-                        case REGISTER_CLIENT:
-                            registerClient(cmsg.senderId);
-                            return ConnectionEndMessage.SUCCESS;
-                        default:
-                            log.error("Unknown ControlMessage type.");
-                            return ConnectionEndMessage.INVALID_OPERATION;
-                    }
-                } else if (msg instanceof NormalMessage) {
-                    NormalMessage nmsg = (NormalMessage) msg;
-                    Timestamp now = new Timestamp(new java.util.Date().getTime());
-                    nmsg.setTimeOfArrival(now);
-                    addMessage(nmsg);
-                    return ConnectionEndMessage.SUCCESS;
-                } else {
-                    log.error("Invalid message type received.");
-                    return ConnectionEndMessage.INVALID_OPERATION;
-                }
+                Instant timeAccepted = Instant.now();
+                addMessage(msg);
+                long delay = timeAccepted.until(Instant.now(), ChronoUnit.MILLIS);
+                log.info("T: " + String.valueOf(delay));
             } catch (SQLException e) {
-                if (e.getErrorCode() != SERIALIZATION_FAILURE) {
-                    // Serious error
-                    log.error(String.format("SQL error while handling message: %d", e.getErrorCode()), e);
-                    return ConnectionEndMessage.ERROR;
-                }
-                // else just try again.
+                log.error(e.getMessage(), e);
             }
         }
+        log.info("Middleware worker thread shutting down after interrupt.");
     }
 
     private void registerClient(UUID senderId) throws SQLException {

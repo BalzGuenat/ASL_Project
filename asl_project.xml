@@ -205,14 +205,22 @@
 
     <property name="client.jar" value="${jars.dir}/client.jar"/>
     <property name="middleware.jar" value="${jars.dir}/middleware.jar"/>
-
-    <property name="client.config.tenRandomClients" value="${module.asl_project.basedir}/tenRandomClients"/>
+    <property name="stubmiddleware.jar" value="${jars.dir}/stubmiddleware.jar"/>
 
     <target name="package.middleware" depends="all">
         <mkdir dir="${jars.dir}"/>
         <jar destfile="${middleware.jar}" basedir="${asl_project.output.dir}">
             <manifest>
                 <attribute name="Main-Class" value="guenatb.asl.middleware.Middleware"/>
+            </manifest>
+        </jar>
+    </target>
+
+    <target name="package.stubmiddleware" depends="all">
+        <mkdir dir="${jars.dir}"/>
+        <jar destfile="${stubmiddleware.jar}" basedir="${asl_project.output.dir}">
+            <manifest>
+                <attribute name="Main-Class" value="guenatb.asl.middleware.StubMiddleware"/>
             </manifest>
         </jar>
     </target>
@@ -234,6 +242,14 @@
         </fileset>
     </path>
 
+    <target name="run.stubmiddleware" depends="package.stubmiddleware">
+        <java fork="true" classname="guenatb.asl.middleware.StubMiddleware">
+            <classpath location="${stubmiddleware.jar}"/>
+            <classpath refid="lib.classpath"/>
+            <jvmarg value="-Dlog4j.configurationFile=${module.asl_project.basedir}/log4j2_config.xml"/>
+        </java>
+    </target>
+
     <target name="run.middleware" depends="package.middleware">
         <java fork="true" classname="guenatb.asl.middleware.Middleware">
             <classpath location="${middleware.jar}"/>
@@ -247,7 +263,7 @@
             <classpath location="${client.jar}"/>
             <classpath refid="lib.classpath"/>
             <jvmarg value="-Dlog4j.configurationFile=${module.asl_project.basedir}/log4j2_config.xml"/>
-            <arg file="${client.config.tenRandomClients}"/>
+            <arg file="${module.asl_project.basedir}/threeRandomClientsPerMiddleware"/>
         </java>
     </target>
 

@@ -21,6 +21,7 @@ public abstract class AbstractClient {
 
     final String host;
     final UUID clientId;
+    Socket socket = null;
 
     AbstractClient(UUID aclientId, String host) {
         this.host = host;
@@ -32,6 +33,16 @@ public abstract class AbstractClient {
         }
     }
 
+    @Override
+    protected void finalize() throws Throwable {
+        closeSocket();
+        super.finalize();
+    }
+
+    void closeSocket() {
+        try {socket.close();} catch (IOException ignored) {}
+    }
+
     void register() throws CommunicationException {
         ControlMessage msg = new ControlMessage(clientId, ControlMessage.ControlType.REGISTER_CLIENT);
         transmitMessage(msg);
@@ -39,7 +50,8 @@ public abstract class AbstractClient {
 
     private AbstractMessage transmitMessage(AbstractMessage msg) throws CommunicationException {
         try {
-            Socket socket = new Socket(host, GlobalConfig.FIRST_MIDDLEWARE_PORT);
+            if (socket == null || socket.isClosed())
+                socket = new Socket(host, GlobalConfig.MIDDLEWARE_PORT);
             ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
             oos.writeObject(msg);
             oos.flush();
@@ -98,7 +110,8 @@ public abstract class AbstractClient {
         else if (response instanceof ConnectionEndMessage &&
                 ((ConnectionEndMessage) response).type == ConnectionEndMessage.SUCCESS.type)
             return null;
-        else if (response instanceof ConnectionEndMessage)
+        else if (response instanceof ConnectionEndMessage &&
+                ((ConnectionEndMessage) response).type == ConnectionEndMessage.ConnectionEndType.INVALID_OPERATION)
             throw new InvalidOperation();
         else
             throw new RuntimeException();
