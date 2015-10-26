@@ -206,6 +206,7 @@
     <property name="client.jar" value="${jars.dir}/client.jar"/>
     <property name="middleware.jar" value="${jars.dir}/middleware.jar"/>
     <property name="stubmiddleware.jar" value="${jars.dir}/stubmiddleware.jar"/>
+    <property name="nodbmiddleware.jar" value="${jars.dir}/nodbmiddleware.jar"/>
 
     <target name="package.middleware" depends="all">
         <mkdir dir="${jars.dir}"/>
@@ -225,6 +226,15 @@
         </jar>
     </target>
 
+    <target name="package.nodbmiddleware" depends="all">
+        <mkdir dir="${jars.dir}"/>
+        <jar destfile="${nodbmiddleware.jar}" basedir="${asl_project.output.dir}">
+            <manifest>
+                <attribute name="Main-Class" value="guenatb.asl.middleware.NoDbMiddleware"/>
+            </manifest>
+        </jar>
+    </target>
+
     <target name="package.client" depends="all">
         <mkdir dir="${jars.dir}"/>
         <jar destfile="${client.jar}" basedir="${asl_project.output.dir}">
@@ -233,8 +243,6 @@
             </manifest>
         </jar>
     </target>
-
-    <target name="package.all" depends="package.client, package.middleware"/>
 
     <path id="lib.classpath">
         <fileset dir="${module.asl_project.basedir}/lib">
@@ -245,6 +253,14 @@
     <target name="run.stubmiddleware" depends="package.stubmiddleware">
         <java fork="true" classname="guenatb.asl.middleware.StubMiddleware">
             <classpath location="${stubmiddleware.jar}"/>
+            <classpath refid="lib.classpath"/>
+            <jvmarg value="-Dlog4j.configurationFile=${module.asl_project.basedir}/log4j2_config.xml"/>
+        </java>
+    </target>
+
+    <target name="run.nodbmiddleware" depends="package.nodbmiddleware">
+        <java fork="true" classname="guenatb.asl.middleware.NoDbMiddleware">
+            <classpath location="${nodbmiddleware.jar}"/>
             <classpath refid="lib.classpath"/>
             <jvmarg value="-Dlog4j.configurationFile=${module.asl_project.basedir}/log4j2_config.xml"/>
         </java>
@@ -264,6 +280,15 @@
             <classpath refid="lib.classpath"/>
             <jvmarg value="-Dlog4j.configurationFile=${module.asl_project.basedir}/log4j2_config.xml"/>
             <arg file="${module.asl_project.basedir}/threeRandomClientsPerMiddleware"/>
+        </java>
+    </target>
+
+    <target name="run.nodbclient" depends="package.client">
+        <java fork="true" classname="guenatb.asl.client.ClientDriver">
+            <classpath location="${client.jar}"/>
+            <classpath refid="lib.classpath"/>
+            <jvmarg value="-Dlog4j.configurationFile=${module.asl_project.basedir}/log4j2_config.xml"/>
+            <arg file="${module.asl_project.basedir}/noDbClients"/>
         </java>
     </target>
 

@@ -55,34 +55,45 @@ public abstract class ClientDriver {
     protected static void startClient(String spec) throws IOException {
         try {
             String[] args = spec.split(" ");
+            String[] clientArgs = Arrays.copyOfRange(args, 2, args.length);
+            int numOfClients = Integer.parseInt(args[1]);
+            List<Thread> threads = new ArrayList<>();
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                try {
+                    for (Thread t : threads) {
+                        if (t.isAlive()) {
+                            t.interrupt();
+                            t.join(WAIT_TIME_AFTER_INTERRUPT);
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }));
+
             switch (args[0]) {
                 case "RandomClient":
-                    int numOfClients = Integer.parseInt(args[1]);
-                    List<Thread> threads = new ArrayList<>();
-                    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                        try {
-                            for (Thread t : threads) {
-                                if (t.isAlive()) {
-                                    t.interrupt();
-                                    t.join(WAIT_TIME_AFTER_INTERRUPT);
-                                }
-                            }
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                    }));
                     for (int i = 0; i < numOfClients; i++) {
                         threads.add(new Thread(() -> {
-                            RandomClient.main(Arrays.copyOfRange(args, 2, args.length));
+                            RandomClient.main(clientArgs);
                         }));
                     }
-                    for (Thread t : threads)
-                        t.start();
                     break;
+                case "NoDbClient":
+                    for (int i = 0; i < numOfClients; i++) {
+                        threads.add(new Thread(() -> {
+                            NoDbClient.main(clientArgs);
+                        }));
+                    }
+                    break;
+
                 default:
-                    log.error("Don't know how to instantiate client class \"" + args[0] + "\".");
+                    log.error(String.format("Don't know how to instantiate client class %s.", args[0]));
                     break;
             }
+
+            for (Thread t : threads)
+                t.start();
         } catch (NumberFormatException e) {
             log.error("Could not parse number in config line.", e);
         }
