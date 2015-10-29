@@ -9,11 +9,18 @@ public final class GlobalConfig {
     public static final int BODY_SIZE_UPPER_BOUND = 2000;
 
     /*
+    // local
     public static final String DB_URL = "jdbc:postgresql://localhost:5432/asl";
     public static final String DB_USER = "postgres";
     public static final String DB_PASSWORD = "ham";
-    */
+    *//*
+    * // dryad
     public static final String DB_URL = "jdbc:postgresql://10.111.1.55:39800/asl";
+    public static final String DB_USER = "postgres";
+    public static final String DB_PASSWORD = "ham";
+    */
+    // amazon
+    public static final String DB_URL = "jdbc:postgresql://172.31.34.158:5432/asl";
     public static final String DB_USER = "postgres";
     public static final String DB_PASSWORD = "ham";
 
